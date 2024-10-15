@@ -352,6 +352,8 @@ struct ApplyState {
   DenseMap<StringAttr, LegacyWiringProblem> legacyWiringProblems;
   SmallVector<WiringProblem> wiringProblems;
 
+  DenseMap<FModuleLike, ConventionAttr> conventionAnnotatedModules;
+
   hw::InnerSymbolNamespace &getNamespace(FModuleLike module) {
     return namespaces[module];
   }

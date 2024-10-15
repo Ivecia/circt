@@ -298,6 +298,12 @@ static LogicalResult applyConventionAnno(const AnnoPathValue &target,
   if (!conventionStrAttr)
     return failure();
 
+  bool applyToHierarchy = false;
+  if (auto attr = tryGetAs<BoolAttr>(anno, anno, "hierarchy", loc,
+                                     conventionAnnoClass)) {
+    applyToHierarchy = attr.getValue();
+  }
+
   auto conventionStr = conventionStrAttr.getValue();
   auto conventionOpt = parseConvention(conventionStr);
   if (!conventionOpt)
@@ -305,14 +311,23 @@ static LogicalResult applyConventionAnno(const AnnoPathValue &target,
 
   auto convention = *conventionOpt;
 
+  FModuleLike moduleLike;
   if (auto moduleOp = dyn_cast<FModuleOp>(op)) {
     moduleOp.setConvention(convention);
-    return success();
+    moduleLike = moduleOp;
   }
 
   if (auto extModuleOp = dyn_cast<FExtModuleOp>(op)) {
     extModuleOp.setConvention(convention);
-    return success();
+    moduleLike = extModuleOp;
+  }
+
+  if (applyToHierarchy) {
+    SmallVector<FModuleLike> worklist;
+    auto &instanceGraph = state.instancePathCache.instanceGraph;
+    // Traverse all the submodules in the hierarchy and apply the convention
+    for (auto &module : llvm::post_order(instanceGraph[moduleLike])) {
+    }
   }
 
   return error() << "can only target to a module or extmodule";
