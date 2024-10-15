@@ -12,6 +12,7 @@
 #include "circt/Dialect/Verif/VerifPasses.h"
 
 #include "mlir/Transforms/DialectConversion.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
 using namespace circt;
 
@@ -31,12 +32,11 @@ struct LowerFormalToHW
   void runOnOperation() override;
 };
 
-struct FormalOpConversionPattern : public OpConversionPattern<verif::FormalOp> {
-  using OpConversionPattern<FormalOp>::OpConversionPattern;
+struct FormalOpConversionPattern : public OpRewritePattern<verif::FormalOp> {
+  using OpRewritePattern::OpRewritePattern;
 
-  LogicalResult
-  matchAndRewrite(FormalOp op, OpAdaptor operands,
-                  ConversionPatternRewriter &rewriter) const override {
+  LogicalResult matchAndRewrite(FormalOp op,
+                                PatternRewriter &rewriter) const override {
     // Create the ports for all the symbolic values
     SmallVector<hw::PortInfo> ports;
     for (auto symOp : make_early_inc_range(
@@ -56,7 +56,8 @@ struct FormalOpConversionPattern : public OpConversionPattern<verif::FormalOp> {
 
     // Replace symbolic values with module arguments
     size_t i = 0;
-    for (auto symOp : moduleOp.getBodyBlock()->getOps<SymbolicValueOp>()) {
+    for (auto symOp : llvm::make_early_inc_range(
+             moduleOp.getBodyBlock()->getOps<SymbolicValueOp>())) {
       rewriter.replaceAllUsesWith(symOp.getResult(),
                                   moduleOp.getArgumentForInput(i));
       i++;
@@ -71,13 +72,12 @@ struct FormalOpConversionPattern : public OpConversionPattern<verif::FormalOp> {
 void LowerFormalToHW::runOnOperation() {
   auto &context = getContext();
   mlir::ConversionTarget target(context);
-  target.addLegalDialect<hw::HWDialect, verif::VerifDialect>();
+  // target.addLegalDialect<hw::HWDialect, verif::VerifDialect>();
   target.addIllegalOp<verif::FormalOp, verif::SymbolicValueOp>();
 
   RewritePatternSet patterns(&context);
   patterns.add<FormalOpConversionPattern>(&context);
 
-  if (failed(
-          applyPartialConversion(getOperation(), target, std::move(patterns))))
+  if (failed(applyPatternsAndFoldGreedily(getOperation(), std::move(patterns))))
     signalPassFailure();
 }
